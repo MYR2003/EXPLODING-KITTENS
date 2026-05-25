@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <raylib.h>
 #include <math.h>
+#include <signal.h>
 
 #include "funciones.h"
 
@@ -48,6 +49,16 @@ const char* lang_dict[2][TXT_COUNT] = {
     }
 };
 
+// Internal Translation overrides for Card Text rendering regardless of Server's language logic
+const char* local_card_names[2][13] = {
+    { "Exploding Kitten", "Deactivation", "Attack", "Skip", "Favor", "Shuffle", "Future Sight", "Nao", "Taco", "Mellon", "Potato", "Bread", "Apple" },
+    { "Exploding Mona Shina", "Desactivacion", "Ataque", "Saltar", "Favor", "Barajar", "Vision Futura", "Nao", "Taco", "Melon", "Papa", "Pan", "Manzana" }
+};
+const char* local_card_descs[2][13] = {
+    { "Draw this and you lose!", "Disarm an exploding kitten", "Next player takes 2 turns", "Skip your turn", "Another player gives you a card", "Shuffle the deck", "See top 3 cards", "Cancel any card effect", "Steal a random card (need 2)", "Steal a random card (need 2)", "Steal a random card (need 2)", "Steal a random card (need 2)", "Steal a random card (need 2)" },
+    { "Saca esto y pierdes!", "Desactiva un exploding kitten", "El siguiente jugador toma 2 turnos", "Salta tu turno", "Otro jugador te da una carta", "Baraja el mazo", "Mira las 3 cartas superiores", "Cancela el efecto de cualquier carta", "Roba una carta al azar (necesitas 2)", "Roba una carta al azar (necesitas 2)", "Roba una carta al azar (necesitas 2)", "Roba una carta al azar (necesitas 2)", "Roba una carta al azar (necesitas 2)" }
+};
+
 // ==================== GAME STATES ====================
 typedef enum { LOGIN, MAIN_MENU, CREATE_GAME, JOIN_GAME, WAITING_PLAYERS, GAME_PLAY, GAME_OVER } ClientGameState;
 
@@ -84,7 +95,7 @@ typedef struct {
     double feedback_timer;
 
     int  show_future_sight;
-    char future_sight_cards[3][64];
+    int  future_sight_types[3]; // Uses types instead of text to allow local translations
     int  future_sight_count;
 
     int nope_window_active;
@@ -113,8 +124,8 @@ CardArtTextures cardArt;
 const char* cardImagePaths[13] = {
     "assets/Kuroha_(ExplodingKitten).png", "assets/Liora_(Deactivation).png", "assets/(Attack).png",
     "assets/(Skip).jpg", "assets/(Favor).png", "assets/(Shuffle).jpg", "assets/(FutureSight).jpg",
-    "assets/placeholder.jpg", "assets/placeholder.jpg", "assets/placeholder.jpg", "assets/placeholder.jpg",
-    "assets/placeholder.jpg", "assets/placeholder.jpg"
+    "assets/Cuy_(Nao).jpg", "assets/(Taco).jpg", "assets/(Mellon).jpg", "assets/(Potato).jpg",
+    "assets/(Bread).jpg", "assets/(Apple).jpg"
 };
 
 // ==================== UTILITY ====================
@@ -225,8 +236,6 @@ void* MessageHandlerThread(void* args) {
             if (sscanf(payload,"%d|%63[^\n]",&dtype,dname)>=1) {
                 client.discard_top_type=dtype;
                 snprintf(client.discard_top_name, sizeof(client.discard_top_name), "%s", dname);
-                Cartas* tmp = CrearCard((CardType)dtype, -1);
-                if (tmp) { snprintf(client.discard_top_desc, sizeof(client.discard_top_desc), "%s", tmp->descripcion); free(tmp); }
             }
         }
         else if (strcmp(msg_type,"NOPE_WINDOW")==0) {
@@ -261,8 +270,7 @@ void* MessageHandlerThread(void* args) {
             while (tok2 && client.future_sight_count < 3) {
                 int t2, id2;
                 if (sscanf(tok2, "%d|%d", &t2, &id2) == 2) {
-                    Cartas* c2 = CrearCard((CardType)t2, id2);
-                    if (c2) { snprintf(client.future_sight_cards[client.future_sight_count], 64, "%s", c2->nombre); free(c2); }
+                    client.future_sight_types[client.future_sight_count] = t2;
                     client.future_sight_count++;
                 }
                 tok2 = strtok(NULL, ";");
@@ -377,7 +385,10 @@ void DrawGameplay(int sw, int sh) {
 
     DrawText(T(TXT_DISCARD),discX + discW/2 - MeasureText(T(TXT_DISCARD),14)/2, discY-18, 14, LIGHTGRAY);
     if (client.discard_top_type >= 0) {
-        DrawFormattedCardSmall(discX, discY, discW, discH, client.discard_top_name, client.discard_top_desc, (CardType)client.discard_top_type);
+        DrawFormattedCardSmall(discX, discY, discW, discH, 
+            local_card_names[client.language][client.discard_top_type], 
+            local_card_descs[client.language][client.discard_top_type], 
+            (CardType)client.discard_top_type);
     } else {
         DrawRectangle(discX, discY, discW, discH, (Color){40,40,40,255});
         DrawRectangleLinesEx((Rectangle){discX,discY,discW,discH},2,GRAY);
@@ -452,7 +463,8 @@ void DrawGameplay(int sw, int sh) {
         int cy = isSel ? dynHandY - 14 : dynHandY;
 
         int clicked = DrawFormattedCard(cx, cy, dynCardW, dynCardH,
-            cur->nombre ? cur->nombre : "?", cur->descripcion ? cur->descripcion : "",
+            local_card_names[client.language][cur->type], 
+            local_card_descs[client.language][cur->type],
             cur->type, isSel, (isSelecting && isMyTurn) || client.action_mode == MODE_GIVE_FAVOR);
 
         if (clicked) {
@@ -483,7 +495,8 @@ void DrawGameplay(int sw, int sh) {
         DrawText(T(TXT_FUTURE_SIGHT),boxX+boxW/2-MeasureText(T(TXT_FUTURE_SIGHT),20)/2,boxY+12,20,WHITE);
         DrawText(T(TXT_TOP_3),boxX+16,boxY+44,15,LIGHTGRAY);
         for (int fi=0; fi<client.future_sight_count; fi++) {
-            char line[80]; snprintf(line,sizeof(line),"%d. %s",fi+1,client.future_sight_cards[fi]);
+            char line[80]; 
+            snprintf(line,sizeof(line),"%d. %s",fi+1,local_card_names[client.language][client.future_sight_types[fi]]);
             DrawText(line,boxX+24,boxY+68+fi*36,18,YELLOW);
         }
         DrawText(T(TXT_CLICK_CLOSE),boxX+boxW/2-MeasureText(T(TXT_CLICK_CLOSE),13)/2,boxY+boxH-28,13,LIGHTGRAY);
@@ -628,6 +641,9 @@ int main(void) {
     int sw=1150, sh=780;
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(sw,sh,"Exploding Kittens - Online"); SetTargetFPS(60);
+    
+    // Ignore dead sockets crashing the client application
+    signal(SIGPIPE, SIG_IGN); 
 
     memset(&cardArt, 0, sizeof(CardArtTextures));
     for (int i = 0; i < 13; i++) {
@@ -636,8 +652,8 @@ int main(void) {
     }
     
     memset(&client,0,sizeof(client));
-    client.flag_usa = LoadTexture("assets/flag_usa.png");
-    client.flag_chile = LoadTexture("assets/flag_chile.png");
+    client.flag_usa = LoadTexture("assets/flag_usa.jpg");
+    client.flag_chile = LoadTexture("assets/flag_chile.jpg");
     client.flags_loaded = (client.flag_usa.width > 0 && client.flag_chile.width > 0) ? 1 : 0;
 
     client.is_connected=0; client.game_ended=0; client.current_state=LOGIN;
@@ -648,32 +664,78 @@ int main(void) {
 
     char username[50]=""; int username_idx=0;
     char room_code[20]=""; int room_code_idx=0;
+    char server_ip[50]="127.0.0.1"; int ip_idx=9;
+    int active_input = 0;
 
     while (!WindowShouldClose()) {
         sw=GetScreenWidth(); sh=GetScreenHeight();
 
         switch(client.current_state) {
+        // ======== LOGIN ========
         case LOGIN: {
-            if (IsKeyPressed(KEY_ENTER) && username_idx > 0) {
-                int sock=ConnectToServer("127.0.0.1",8080);
-                if(sock>=0){
+            // Toggle active input field with TAB
+            if (IsKeyPressed(KEY_TAB)) {
+                active_input = (active_input == 0) ? 1 : 0;
+            }
+
+            // Handle typing based on which input is active
+            if (active_input == 0) { // Username logic
+                if(IsKeyPressed(KEY_BACKSPACE) && username_idx > 0) username[--username_idx]='\0';
+                else if(username_idx < 49){
+                    int k = GetCharPressed();
+                    if(k >= 32 && k <= 126){ username[username_idx++]=(char)k; username[username_idx]='\0'; }
+                }
+            } else { // IP logic
+                if(IsKeyPressed(KEY_BACKSPACE) && ip_idx > 0) server_ip[--ip_idx]='\0';
+                else if(ip_idx < 49){
+                    int k = GetCharPressed();
+                    // Allow numbers and dots for IP addresses
+                    if((k >= '0' && k <= '9') || k == '.'){ server_ip[ip_idx++]=(char)k; server_ip[ip_idx]='\0'; }
+                }
+            }
+
+            // Connect when ENTER is pressed and both fields have data
+            if (IsKeyPressed(KEY_ENTER) && username_idx > 0 && ip_idx > 0) {
+                int sock = ConnectToServer(server_ip, 8080); // Now uses dynamic IP
+                if(sock >= 0){
                     client.socket=sock; client.is_connected=1;
                     client.player=CreatePlayer(0,username); send(sock,username,strlen(username),0);
                     char mt[256],pl[256]; RecvMessageNet(mt,pl);
                     pthread_create(&client.message_thread,NULL,MessageHandlerThread,NULL);
                     client.current_state=MAIN_MENU;
+                } else {
+                    SetFeedback("Connection Failed! Check IP.");
                 }
-            } else if(IsKeyPressed(KEY_BACKSPACE)&&username_idx>0) username[--username_idx]='\0';
-            else if(username_idx<49){int k=GetCharPressed();if(k>=32&&k<=126){username[username_idx++]=(char)k;username[username_idx]='\0';}}
+            }
 
             BeginDrawing(); ClearBackground((Color){25,25,25,255});
-            DrawText("EXPLODING KITTENS",sw/2-MeasureText("EXPLODING KITTENS",52)/2,sh/4,52,WHITE);
-            DrawText(T(TXT_ENTER_USER),sw/2-140,sh/2-20,20,LIGHTGRAY);
-            DrawRectangleRounded((Rectangle){sw/2-160.f,sh/2+10.f,320,44},0.3f,6,(Color){55,55,55,255});
-            DrawRectangleLinesEx((Rectangle){sw/2-160.f,sh/2+10.f,320,44},2,WHITE);
-            DrawText(username,sw/2-150,sh/2+22,22,YELLOW);
-            DrawText(T(TXT_PRESS_ENTER_CONN),sw/2-MeasureText(T(TXT_PRESS_ENTER_CONN),15)/2,sh/2+68,15,GRAY);
-            DrawLanguageButton(sw); EndDrawing(); break;
+            DrawText("EXPLODING KITTENS",sw/2-MeasureText("EXPLODING KITTENS",52)/2,sh/4 - 40,52,WHITE);
+
+            // Draw Username Input
+            Color userBoxColor = (active_input == 0) ? YELLOW : WHITE;
+            DrawText(T(TXT_ENTER_USER),sw/2-140,sh/2-60,20,LIGHTGRAY);
+            DrawRectangleRounded((Rectangle){sw/2-160.f,sh/2-30.f,320,44},0.3f,6,(Color){55,55,55,255});
+            DrawRectangleLinesEx((Rectangle){sw/2-160.f,sh/2-30.f,320,44},2,userBoxColor);
+            DrawText(username,sw/2-150,sh/2-18,22,userBoxColor);
+
+            // Draw IP Input
+            Color ipBoxColor = (active_input == 1) ? YELLOW : WHITE;
+            const char* ipLabel = (client.language == 0) ? "Server IP Address:" : "Direccion IP del Servidor:";
+            DrawText(ipLabel,sw/2-140,sh/2+30,20,LIGHTGRAY);
+            DrawRectangleRounded((Rectangle){sw/2-160.f,sh/2+60.f,320,44},0.3f,6,(Color){55,55,55,255});
+            DrawRectangleLinesEx((Rectangle){sw/2-160.f,sh/2+60.f,320,44},2,ipBoxColor);
+            DrawText(server_ip,sw/2-150,sh/2+72,22,ipBoxColor);
+
+            DrawText("Press TAB to switch fields",sw/2-MeasureText("Press TAB to switch fields",14)/2,sh/2+120,14,GRAY);
+            DrawText(T(TXT_PRESS_ENTER_CONN),sw/2-MeasureText(T(TXT_PRESS_ENTER_CONN),15)/2,sh/2+150,15,GRAY);
+            
+            if (client.feedback_timer > GetTime()) {
+                DrawText(client.feedback_msg, sw/2-MeasureText(client.feedback_msg,18)/2, sh/2+180, 18, RED);
+            }
+
+            DrawLanguageButton(sw); 
+            EndDrawing(); 
+            break;
         }
 
         case MAIN_MENU: {
@@ -726,8 +788,16 @@ int main(void) {
 
         case GAME_OVER: {
             if(IsKeyPressed(KEY_SPACE)){
-                client.current_state=MAIN_MENU; client.game_ended=0; client.action_mode=MODE_NONE;
-                client.selected_card_id_1=-1; client.selected_card_id_2=-1; client.discard_top_type=-1;
+                // CRITICAL FIX: Safe exit process on game reset clears dead sockets to prevent crashes
+                if(client.is_connected){ close(client.socket); client.is_connected=0; }
+                client.current_state=LOGIN; 
+                client.game_ended=0; 
+                client.action_mode=MODE_NONE;
+                client.selected_card_id_1=-1; 
+                client.selected_card_id_2=-1; 
+                client.discard_top_type=-1;
+                client.show_kitten_anim=0; 
+                client.nope_window_active=0;
                 strcpy(client.discard_top_name,"Empty");
             }
             DrawGameOver(sw,sh); break;

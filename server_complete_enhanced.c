@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "funciones.h"
 
@@ -66,6 +67,7 @@ int AddPlayerToGame(int game_id, Player * player) {
 }
 
 void SendMessage(int client_socket, const char* msg_type, const char* payload) {
+    if (client_socket <= 0) return;
     char buffer[1024];
     SerializeMessage(msg_type, payload, buffer);
     GetLamportClock();
@@ -99,6 +101,9 @@ int WaitForNope(GameState* game, Player* initiator, CardType card_type) {
     game->nope_active = 1;
     game->nope_count = 0;
 
+    // CRITICAL FIX: Unlock the global game state so other threads can process PLAY_NAO
+    pthread_mutex_unlock(&games_lock);
+
     while (game->nope_active) {
         int res = pthread_cond_timedwait(&game->nope_cond, &game->nope_mutex, &ts);
         if (res == ETIMEDOUT) break; 
@@ -112,6 +117,9 @@ int WaitForNope(GameState* game, Player* initiator, CardType card_type) {
     game->nope_active = 0;
     int is_noped = (game->nope_count % 2 != 0);
     pthread_mutex_unlock(&game->nope_mutex);
+    
+    // Re-acquire the global game lock before returning to standard execution
+    pthread_mutex_lock(&games_lock);
     
     if (is_noped) BroadcastMessage(game, "ACTION_CANCELED", "");
     return is_noped;
@@ -193,11 +201,17 @@ void ProcessPlayerAction(GameState * game, Player* player, const char* action_ms
                 BroadcastMessage(game, "DISCARD_UPDATE", discard_upd);
                 
                 free(nope_card);
-                pthread_cond_signal(&game->nope_cond);
+                pthread_cond_signal(&game->nope_cond); // Signal the waiting thread
             }
             pthread_mutex_unlock(&game->nope_mutex);
         }
         return; 
+    }
+
+    // Safety Intercept: Prevent normal card plays while the Nope Window is actively pausing the game.
+    if (game->nope_active) {
+        SendMessage(player->socket, "ERROR", "Wait for the NOPE window to finish.");
+        return;
     }
 
     // Verify it is this player's turn or they are fulfilling a required response
@@ -483,12 +497,19 @@ void* HandleClient(void* args) {
         }
     }
     
-    close(client_socket); free(client_info); FreePlayer(player);
+    // Safety measures to avoid segfaults when player drops
+    pthread_mutex_lock(&games_lock);
+    if (player != NULL) player->socket = -1; // Mark socket as dead without freeing entirely to prevent dangling pointers inside active loops
+    pthread_mutex_unlock(&games_lock);
+    
+    close(client_socket); 
+    free(client_info); 
     pthread_exit(NULL);
 }
 
 int main(void) {
     srand(time(NULL));
+    signal(SIGPIPE, SIG_IGN); // Prevent fatal crashes from disconnected sockets
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) return 1;
     
