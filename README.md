@@ -5,6 +5,12 @@
 ### Comando para compilar el programa
 make
 
+#### Solo server
+make ./server
+
+#### Solo cliente
+make ./client
+
 ### Comando para correr el servidor
 ./server
 
