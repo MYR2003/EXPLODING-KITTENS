@@ -51,8 +51,8 @@ const char* lang_dict[2][TXT_COUNT] = {
 
 // Internal Translation overrides for Card Text rendering regardless of Server's language logic
 const char* local_card_names[2][13] = {
-    { "Exploding Kitten", "Deactivation", "Attack", "Skip", "Favor", "Shuffle", "Future Sight", "Nao", "Taco", "Mellon", "Potato", "Bread", "Apple" },
-    { "Exploding Mona Shina", "Desactivacion", "Ataque", "Saltar", "Favor", "Barajar", "Vision Futura", "Nao", "Taco", "Melon", "Papa", "Pan", "Manzana" }
+    { "Kuroha (Exploding Kitten)", "Liora", "Valery Vane", "Nautica", "Elowen", "Elara Vane", "Marina", "Nao", "Taco", "Seraphina Sky", "Amara", "Celestia", "Lyra" },
+    { "Kuroha (Exploding Mona Shina)", "Liora", "Valery Vane", "Nautica", "Elowen", "Elara Vane", "Marina", "Nao", "Taco", "Seraphina Sky", "Amara", "Celestia", "Lyra" }
 };
 const char* local_card_descs[2][13] = {
     { "Draw this and you lose!", "Disarm an exploding kitten", "Next player takes 2 turns", "Skip your turn", "Another player gives you a card", "Shuffle the deck", "See top 3 cards", "Cancel any card effect", "Steal a random card (need 2)", "Steal a random card (need 2)", "Steal a random card (need 2)", "Steal a random card (need 2)", "Steal a random card (need 2)" },
@@ -664,7 +664,7 @@ int main(void) {
 
     char username[50]=""; int username_idx=0;
     char room_code[20]=""; int room_code_idx=0;
-    char server_ip[50]="98.80.205.211"; int ip_idx=9;
+    char server_ip[50]="44.214.143.12"; int ip_idx=9;
     int active_input = 0;
 
     while (!WindowShouldClose()) {
