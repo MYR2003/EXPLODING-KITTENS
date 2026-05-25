@@ -664,7 +664,7 @@ int main(void) {
 
     char username[50]=""; int username_idx=0;
     char room_code[20]=""; int room_code_idx=0;
-    char server_ip[50]="127.0.0.1"; int ip_idx=9;
+    char server_ip[50]="98.80.205.211"; int ip_idx=9;
     int active_input = 0;
 
     while (!WindowShouldClose()) {
