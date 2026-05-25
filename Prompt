@@ -1,0 +1,30 @@
+
+Context:
+"I am creating a On-Cloud (AWS) video-game in C, the problem is I'm very short on time, so I need your help to finish it. The game is a variant of "Exploding Kittens", this is a 2 to 5 players game, I will explain the objective of the game (Win/Lose conditions):
+- At the end of the player turn if the card he draws from the deck is an "exploding kitten" he loses the game, BUT if that player has a "Deactivation" on hand he loses the "Deactivation" and has the right to *hide* the "Exploding kitten" card back into the deck in any position he wants to. If that player dose not have a "Deactivation" card he loses the game. If the another player grabs a "Exploding kitten" and that makes him lose the game, and they were the only two players left, the last player standing wins the game.
+I will explain the cards and the amount of cards there are:
+(4) Exploding Kitten: If a player draws this card from the deck he loses the game.
+(6) Deactivation: Every player starts the game with 1 "Deactivation" card. If a player draws a "Exploding kitten" instead of losing the game, he plays the "Deactivation" card and then puts the "Exploding kitten" back into the deck in ANY position the player chooses to.
+(4) Attack: The turn of the player is skipped (Dose not draw card) and the next player will have to play 2 turns instead of 1. This card can be stacked, meaning if the player that gets 2 turns has also an "Attack" card he can play it and give the next player 4 turns instead.
+(4) Skip: The turn of the player is skipped (Dose not draw a card).
+(4) Favor: The player selects another player the selected player chooses a card from his hand and gives it to the player.
+(4) Shuffle: The deck is shuffled.
+(5) Future Sight: The player *sees* the top 3 cards from the deck (In order).
+(5) Nao: The player rejects any card (Excluding "Exploding kitten" and "Deactivation") and the card loses its effects (Example: If player 1 plays a "Skip" card and player 2 plays a "Nao" card, instead of skipping player 1's turn the effect of the card is negated and Player 1 keeps playing).
+(4) Taco: If the player has 2 of this card (Needs to play both cards) he can steal a card at random from a selected player.
+(4) Mellon: If the player has 2 of this card (Needs to play both cards) he can steal a card at random from a selected player.
+(4) Potato: If the player has 2 of this card (Needs to play both cards) he can steal a card at random from a selected player.
+(4) Bread: If the player has 2 of this card (Needs to play both cards) he can steal a card at random from a selected player.
+(4) Apple: If the player has 2 of this card (Needs to play both cards) he can steal a card at random from a selected player.
+Now that you understand what cards there are and the objective of the game we can proceed. I am using sockets to communicate between the server and the client. I will attach my current client.c and server.c files I will also attach my functions.h and functions.c files (My personal library that I created, it is cleaner and modular) and the makefile."
+
+
+Fixes to be made:
+* When a Nao card is played the effects of the negated card are still played.
+* When a game is finished and the players try to create a new lobby, they get the same room_id, then when trying to enter the room the game crashes
+* Name and description of the cards should also be on both languages (And changable inside the code not in the interface).
+
+TO DO list:
+- Subir la caga a la nube
+- Hacer una version web <- podria ser una web que solamente se conecte a una EC2 con multiples clientes (multiples en caso de necesitar escalar max 10 clientes por ejemplo, dependiendo de las capacidades)???
+- QR para conectarse a la version web
